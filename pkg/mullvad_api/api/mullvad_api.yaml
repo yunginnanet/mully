@@ -1,0 +1,814 @@
+openapi: 3.0.1
+info:
+  title: Mullvad App API
+  version: "1"
+servers:
+  - url: "/app"
+paths:
+  /v1/relays:
+    get:
+      summary: Relay list
+      responses:
+        "200":
+          description: Relay list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  locations:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/Location'
+                  openvpn:
+                    type: object
+                    properties:
+                      ports:
+                        description: "Pairs of port/protocol that will accept connections"
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            port:
+                              type: number
+                            protocol:
+                              type: string
+                      relays:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OpenVpnRelay'
+                  wireguard:
+                    type: object
+                    properties:
+                      port_ranges:
+                        description: "List of port ranges that will accept connections"
+                        type: array
+                        items:
+                          type: array
+                          items:
+                            type: integer
+                      ipv4_gateway:
+                        description: The ipv4 gateway of the server, you can ping it to check whether a tunnel is connected or not.
+                        type: string
+                      ipv6_gateway:
+                        description: The ipv6 gateway of the server, you can ping it to check whether a tunnel is connected or not.
+                        type: string
+                      relays:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WireGuardRelay'
+                  bridge:
+                    type: object
+                    properties:
+                      shadowsocks:
+                        description: "List of connection specs for Shadowsocks ports"
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            port:
+                              type: integer
+                            cipher:
+                              type: string
+                            password:
+                              type: string
+                      relays:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/BridgeRelay'
+              example:
+                locations:
+                  se-got:
+                    city: Gothenburg
+                    country: Sweden
+                    latitude: 57.70887
+                    longitude: 11.97456
+                  se-sto:
+                    city: Stockholm
+                    country: Sweden
+                    latitude: 57.70887
+                    longitude: 11.97456
+                openvpn:
+                  ports:
+                    - port: 1300
+                      protocol: udp
+                    - port: 443
+                      protocol: tcp
+                  relays:
+                    - hostname: se-got-001
+                      active: true
+                      owned: true
+                      location: se-got
+                      provider: "31173"
+                      ipv4_addr_in: 185.213.154.66
+                      weight: 100
+                      include_in_country: true
+                wireguard:
+                  port_ranges:
+                    - [53, 53]
+                    - [123, 123]
+                    - [443, 443]
+                    - [4000, 33433]
+                    - [33565, 51820]
+                    - [52001, 60000]
+                  ipv4_gateway: '10.64.0.1'
+                  ipv6_gateway: 'fc00:bbbb:bbbb:bb01::1'
+                  relays:
+                    - hostname: se3-wireguard
+                      active: true
+                      owned: true
+                      location: se-got
+                      provider: "31173"
+                      ipv4_addr_in: 185.213.154.66
+                      ipv6_addr_in: 2a03:1b20:5:f011:31::a03f
+                      weight: 100
+                      include_in_country: true
+                      public_key: "5JMPeO7gXIbR5CnUa/NPNK4L5GqUnreF0/Bozai4pl4="
+                bridge:
+                  shadowsocks:
+                    - protocol: tcp
+                      port: 443
+                      cipher: chacha20
+                      password: password
+                  relays:
+                    - hostname: se-sto-br-001
+                      active: true
+                      owned: true
+                      location: se-sto
+                      provider: "31173"
+                      ipv4_addr_in: 185.213.154.66
+                      weight: 100
+                      include_in_country: true
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/api-addrs:
+    get:
+      summary: List IP addresses for reaching the API
+      responses:
+        "200":
+          description: 200 response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+              example:
+                - '45.83.222.100:443'
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/me:
+    get:
+      summary: Get info about account
+      deprecated: true
+      security:
+        - AccessToken: []
+        - TokenAuth: []
+      responses:
+        "200":
+          description: 200 response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires:
+                    type: string
+              example:
+                token: "1234123412341234"
+                expires: "2020-02-28T12:49:20+00:00"
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/accounts:
+    post:
+      summary: Create account
+      deprecated: true
+      responses:
+        "201":
+          description: 201 response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires:
+                    type: string
+              example:
+                token: "1234123412341234"
+                expires: "2020-02-28T12:49:20+00:00"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/submit-voucher:
+    post:
+      summary: Submit a voucher
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                voucher_code:
+                  type: string
+              required:
+                - voucher_code
+            example:
+              voucher_code: ABCD-EFGH-1234-5678
+      responses:
+        "200":
+          description: 200 response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_added:
+                    type: number
+                  new_expiry:
+                    type: string
+              example:
+                time_added: 2592000
+                new_expiry: "2020-02-28T12:49:20+00:00"
+        "400":
+          description: Error when submitting voucher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                MISSING_ARGUMENT:
+                  value:
+                    code: 'MISSING_ARGUMENT'
+                    error: 'One of the required arguments is missing from the request body'
+                INVALID_VOUCHER:
+                  value:
+                    code: 'INVALID_VOUCHER'
+                    error: 'This voucher code is invalid'
+                VOUCHER_USED:
+                  value:
+                    code: 'VOUCHER_USED'
+                    error: 'This voucher code has already been used'
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/problem-report:
+    post:
+      summary: Submit a problem report
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                message:
+                  type: string
+                log:
+                  type: string
+                metadata:
+                  type: object
+              required:
+                - log
+                - metadata
+      responses:
+        "204":
+          description: 204 response
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+
+  /v1/www-auth-token:
+    post:
+      summary: Request a website auth token (valid for 1 hour)
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      responses:
+        "200":
+          description: 200 response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_token:
+                    type: string
+              example:
+                auth_token: 767b3b8d63944e5ab8751c382ad3b30f
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+
+  /v1/releases/{platform}/{version}:
+    get:
+      summary: Information about app release
+      parameters:
+        - name: platform
+          in: path
+          schema:
+            type: string
+          required: true
+        - name: version
+          in: path
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: 200 response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported:
+                    type: boolean
+                  latest:
+                    type: string
+                    nullable: true
+                  latest_stable:
+                    type: string
+                    nullable: true
+                  latest_beta:
+                    type: string
+                    nullable: true
+              example:
+                supported: true
+                latest: "2020.3"
+                latest_stable: "2020.3"
+                latest_beta: "2020.4-beta1"
+        "404":
+          description: "Release not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              example:
+                code: "RELEASE_NOT_FOUND"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/wireguard-keys:
+    post:
+      summary: Add WireGuard public key
+      deprecated: true
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pubkey:
+                  type: string
+                  description: The WireGuard public key to add
+              required:
+                - pubkey
+            example:
+              pubkey: abdXKwUtjpSJTAA5lLphhUqfmDP8G/SK78uH9NG0rC0=
+      responses:
+        "201":
+          description: 201 response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WireGuardPubkey"
+              example:
+                id: abdXKwUtjpSJTAA5lLphhUqfmDP8G%2FSK78uH9NG0rC0%3D
+                pubkey: abdXKwUtjpSJTAA5lLphhUqfmDP8G/SK78uH9NG0rC0=
+                ipv4_address: 10.99.0.1/32
+                ipv6_address: 'fc00:bbbb:bbbb:bb01::1/128'
+        "400":
+          description: Error when adding a WireGuard key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                MISSING_ARGUMENT:
+                  value:
+                    code: 'MISSING_ARGUMENT'
+                    error: 'One of the required arguments is missing from the request body'
+                INVALID_PUBKEY:
+                  value:
+                    code: 'INVALID_PUBKEY'
+                    error: '"pubkey" is not a valid WireGuard public key'
+                KEY_LIMIT_REACHED:
+                  value:
+                    code: 'KEY_LIMIT_REACHED'
+                    error: 'Account already has the maximum number of devices'
+                PUBKEY_IN_USE:
+                  value:
+                    code: 'PUBKEY_IN_USE'
+                    error: 'WireGuard public key in use by other account'
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/wireguard-keys/{pubkey}:
+    get:
+      summary: Get WireGuard public key
+      deprecated: true
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WireGuardPubKey"
+      responses:
+        "200":
+          description: 200 response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WireGuardPubkey"
+              example:
+                ipv4_address: 10.99.0.1/32
+                ipv6_address: 'fc00:bbbb:bbbb:bb01::1/128'
+                id: abdXKwUtjpSJTAA5lLphhUqfmDP8G%2FSK78uH9NG0rC0%3D
+                pubkey: abdXKwUtjpSJTAA5lLphhUqfmDP8G/SK78uH9NG0rC0=
+
+        "404":
+          description: "WireGuard key error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                PUBKEY_NOT_FOUND:
+                  value:
+                    code: 'PUBKEY_NOT_FOUND'
+                    error: 'The requested pubkey does not exist'
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      summary: Delete WireGuard public key
+      deprecated: true
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WireGuardPubKey"
+      responses:
+        "204":
+          description: 204 response
+        "404":
+          description: "WireGuard key error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                PUBKEY_NOT_FOUND:
+                  value:
+                    code: 'PUBKEY_NOT_FOUND'
+                    error: 'The requested pubkey does not exist'
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/replace-wireguard-key:
+    post:
+      summary: Replace a WireGuard pubkey
+      deprecated: true
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old:
+                  type: string
+                  description: The WireGuard public key to remove
+                new:
+                  type: string
+                  description: The WireGuard public key to add
+              required:
+                - old
+                - new
+            example:
+              old: "abdXKwUtjpSJTAA5lLphhUqfmDP8G/SK78uH9NG0rC0="
+              new: "veGD6/aEY6sMfN3Ls7YWPmNgu3AheO7nQqsFT47YSws="
+      responses:
+        "200":
+          description: "The new key already exists on the account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WireGuardPubkey"
+              example:
+                id: abdXKwUtjpSJTAA5lLphhUqfmDP8G%2FSK78uH9NG0rC0%3D
+                pubkey: abdXKwUtjpSJTAA5lLphhUqfmDP8G/SK78uH9NG0rC0=
+                ipv4_address: 10.99.0.1/32
+                ipv6_address: 'fc00:bbbb:bbbb:bb01::1/128'
+        "201":
+          description: "The old key was removed and the new key was added"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WireGuardPubkey"
+              example:
+                id: abdXKwUtjpSJTAA5lLphhUqfmDP8G%2FSK78uH9NG0rC0%3D
+                pubkey: abdXKwUtjpSJTAA5lLphhUqfmDP8G/SK78uH9NG0rC0=
+                ipv4_address: 10.99.0.1/32
+                ipv6_address: 'fc00:bbbb:bbbb:bb01::1/128'
+        "400":
+          description: Error when replacing a WireGuard key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                MISSING_ARGUMENT:
+                  value:
+                    code: 'MISSING_ARGUMENT'
+                    error: 'One of the required arguments is missing from the request body'
+                INVALID_PUBKEY:
+                  value:
+                    code: 'INVALID_PUBKEY'
+                    error: '"new" is not a valid WireGuard public key'
+                PUBKEY_IN_USE:
+                  value:
+                    code: 'PUBKEY_IN_USE'
+                    error: 'WireGuard public key in use by other account'
+                RELAY_PUBKEY:
+                  value:
+                    code: 'RELAY_PUBKEY'
+                    error: 'WireGuard public key in use by a relay'
+                KEY_LIMIT_REACHED:
+                  value:
+                    code: 'KEY_LIMIT_REACHED'
+                    error: 'Account already has the maximum number of devices'
+
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /v1/create-apple-payment:
+    post:
+      summary: Create an Apple In-App payment
+      security:
+        - AccessToken:
+        - TokenAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                receipt_string:
+                  type: string
+                  description: An encrypted Base64-encoded App Store receipt
+              required:
+                - receipt_string
+      responses:
+        "200":
+          description: All transactions in the receipt already exists and no time was added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_added:
+                    type: number
+                  new_expiry:
+                    type: string
+              example:
+                time_added: 0
+                new_expiry: "2020-02-28T12:49:20+00:00"
+        "201":
+          description: New transaction(s) have been added and account expiry updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_added:
+                    type: number
+                  new_expiry:
+                    type: string
+              example:
+                time_added: 2592000
+                new_expiry: "2020-02-28T12:49:20+00:00"
+        "400":
+          description: Error when making an Apple In-App payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                MISSING_ARGUMENT:
+                  value:
+                    code: 'MISSING_ARGUMENT'
+                    error: 'One of the required arguments is missing from the request body'
+                APPLE_PRODUCT_DOES_NOT_EXIST:
+                  value:
+                    code: 'APPLE_PRODUCT_DOES_NOT_EXIST'
+                    error: 'A selected product does not exist'
+                APPLE_RECEIPT_ERROR:
+                  value:
+                    code: 'APPLE_RECEIPT_ERROR'
+                    error: 'The Apple receipt is not valid'
+        "401":
+          $ref: "#/components/responses/InvalidAuthError"
+        "403":
+          $ref: "#/components/responses/PermissionDeniedError"
+        "500":
+          description: Internal error when making an Apple In-App payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorSchema"
+              examples:
+                APPLE_SERVER_CONNECTION_ERROR:
+                  value:
+                    code: 'APPLE_SERVER_CONNECTION_ERROR'
+                    error: "A problem occurred when connecting to the Apple server"
+                INTERNAL_ERROR:
+                  value:
+                    code: 'INTERNAL_ERROR'
+                    error: "Internal server error"
+
+components:
+  securitySchemes:
+    AccessToken:
+      type: http
+      scheme: Bearer
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: '**DEPRECATED** The client must send "Token {account_token}" in the Authorization header.'
+  parameters:
+    WireGuardPubKey:
+      in: path
+      name: pubkey
+      schema:
+        type: string
+      required: true
+      description: The WireGuard public key, urlencoded.
+
+  schemas:
+    ErrorSchema:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The error code.
+        error:
+          type: string
+          description: The error message.
+
+    Location:
+      type: object
+      properties:
+        city:
+          type: string
+        country:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    WireGuardPubkey:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Convenience field with the public key encoded to use with the API (eg when deleting it), same as the pubkey field but urlencoded.
+        pubkey:
+          type: string
+          description: The WireGuard public key.
+        ipv4_address:
+          type: string
+          description: The ipv4 peer adress for WireGuard. Note that the mask may be bigger then a single IP.
+        ipv6_address:
+          type: string
+          description: The ipv6 peer address for WireGuard. Note that the mask may be bigger then a single IP.
+
+    Relay:
+      type: object
+      properties:
+        hostname:
+          type: string
+        location:
+          type: string
+        active:
+          type: boolean
+        owned:
+          type: boolean
+        provider:
+          type: string
+        ipv4_addr_in:
+          type: string
+        include_in_country:
+          type: boolean
+        weight:
+          type: integer
+
+    OpenVpnRelay:
+      allOf:
+        - $ref: '#/components/schemas/Relay'
+
+    WireGuardRelay:
+      allOf:
+        - $ref: '#/components/schemas/Relay'
+        - properties:
+            public_key:
+              type: string
+            ipv6_addr_in:
+              type: string
+            same_ip:
+              description: >
+                Whether the server supports clients using the same IP address.
+                This flag will be removed once all servers support the feature,
+                so clients should default to True if it's missing.
+              type: boolean
+              default: true
+            daita:
+              description: >
+                If true, clients can expect DAITA to be available on this relay.
+                Note that this field is not guaranteed to be present. A missing
+                `daita` property is semantically equivalent to `"daita": false`.
+              type: boolean
+              default: false
+
+    BridgeRelay:
+      allOf:
+        - $ref: '#/components/schemas/Relay'
+
+
+  responses:
+    InvalidAuthError:
+      description: Access token is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorSchema'
+          example:
+            code: 'INVALID_AUTH'
+            error: 'Invalid auth header'
+
+    PermissionDeniedError:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorSchema'
+          example:
+            code: 'INVALID_ACCOUNT'
+            error: 'Invalid Mullvad account'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorSchema'
+          example:
+            code: 'INTERNAL_ERROR'
+            error: 'Internal server error'
