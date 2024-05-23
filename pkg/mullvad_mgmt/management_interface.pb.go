@@ -8413,7 +8413,7 @@ var file_management_interface_proto_depIdxs = []int32{
 	109, // 154: mullvad_daemon.management_interface.ManagementService.CreateNewAccount:input_type -> google.protobuf.Empty
 	106, // 155: mullvad_daemon.management_interface.ManagementService.LoginAccount:input_type -> google.protobuf.StringValue
 	109, // 156: mullvad_daemon.management_interface.ManagementService.LogoutAccount:input_type -> google.protobuf.Empty
-	106, // 157: mullvad_daemon.management_interface.ManagementService.GetAccountData:input_type -> google.protobuf.StringValue
+	106, // 157: mullvad_daemon.management_interface.ManagementService.GetAccountInfo:input_type -> google.protobuf.StringValue
 	109, // 158: mullvad_daemon.management_interface.ManagementService.GetAccountHistory:input_type -> google.protobuf.Empty
 	109, // 159: mullvad_daemon.management_interface.ManagementService.ClearAccountHistory:input_type -> google.protobuf.Empty
 	109, // 160: mullvad_daemon.management_interface.ManagementService.GetWwwAuthToken:input_type -> google.protobuf.Empty
@@ -8482,7 +8482,7 @@ var file_management_interface_proto_depIdxs = []int32{
 	106, // 223: mullvad_daemon.management_interface.ManagementService.CreateNewAccount:output_type -> google.protobuf.StringValue
 	109, // 224: mullvad_daemon.management_interface.ManagementService.LoginAccount:output_type -> google.protobuf.Empty
 	109, // 225: mullvad_daemon.management_interface.ManagementService.LogoutAccount:output_type -> google.protobuf.Empty
-	20,  // 226: mullvad_daemon.management_interface.ManagementService.GetAccountData:output_type -> mullvad_daemon.management_interface.AccountData
+	20,  // 226: mullvad_daemon.management_interface.ManagementService.GetAccountInfo:output_type -> mullvad_daemon.management_interface.AccountData
 	21,  // 227: mullvad_daemon.management_interface.ManagementService.GetAccountHistory:output_type -> mullvad_daemon.management_interface.AccountHistory
 	109, // 228: mullvad_daemon.management_interface.ManagementService.ClearAccountHistory:output_type -> google.protobuf.Empty
 	106, // 229: mullvad_daemon.management_interface.ManagementService.GetWwwAuthToken:output_type -> google.protobuf.StringValue

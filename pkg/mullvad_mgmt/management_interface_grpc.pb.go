@@ -433,7 +433,7 @@ func (c *managementServiceClient) LogoutAccount(ctx context.Context, in *emptypb
 
 func (c *managementServiceClient) GetAccountData(ctx context.Context, in *wrapperspb.StringValue, opts ...grpc.CallOption) (*AccountData, error) {
 	out := new(AccountData)
-	err := c.cc.Invoke(ctx, "/mullvad_daemon.management_interface.ManagementService/GetAccountData", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/mullvad_daemon.management_interface.ManagementService/GetAccountInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -980,7 +980,7 @@ func (UnimplementedManagementServiceServer) LogoutAccount(context.Context, *empt
 	return nil, status.Errorf(codes.Unimplemented, "method LogoutAccount not implemented")
 }
 func (UnimplementedManagementServiceServer) GetAccountData(context.Context, *wrapperspb.StringValue) (*AccountData, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetAccountData not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method GetAccountInfo not implemented")
 }
 func (UnimplementedManagementServiceServer) GetAccountHistory(context.Context, *emptypb.Empty) (*AccountHistory, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAccountHistory not implemented")
@@ -1692,7 +1692,7 @@ func _ManagementService_GetAccountData_Handler(srv interface{}, ctx context.Cont
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/mullvad_daemon.management_interface.ManagementService/GetAccountData",
+		FullMethod: "/mullvad_daemon.management_interface.ManagementService/GetAccountInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ManagementServiceServer).GetAccountData(ctx, req.(*wrapperspb.StringValue))
@@ -2483,7 +2483,7 @@ var ManagementService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ManagementService_LogoutAccount_Handler,
 		},
 		{
-			MethodName: "GetAccountData",
+			MethodName: "GetAccountInfo",
 			Handler:    _ManagementService_GetAccountData_Handler,
 		},
 		{
