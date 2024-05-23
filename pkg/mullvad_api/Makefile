@@ -5,10 +5,12 @@ SET_SPEC_PATH = $(eval SPEC_PATH=$(GET_SPEC_PATH))
 VERSION := "0.0.1"
 UAGENT = "mully/$(VERSION)"
 
-all :: clean dep fetch gen prune
+all :: dep clean fetch gen prune
 
 dep ::
-	if ! openapi-generator-cli version 2>&1 > /dev/null; then npm install @openapitools/openapi-generator-cli -g; fi
+	if ! openapi-generator-cli version 2>&1 > /dev/null; then \
+		npm install @openapitools/openapi-generator-cli -g || return 1; \
+ 	fi
 
 fetch ::
 	mkdir -p api
@@ -24,6 +26,14 @@ gen ::
 		 --api-package mullvad_api \
 		 --http-user-agent $(UAGENT) \
 		 -p $(OPENAPI_GEN_PROPS);
+	mv   test/* ./
+	sed -i 's|openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID/mullvad_api"||g' *_test.go
+	sed -i 's|openapiclient.||g' *_test.go
+	sed -i 's|"/app"|"$(API_BASE)/app"|g' *.go
+	gofmt -w *.go
+	go mod tidy -v
+	go vet ./...
+	go test -v ./
 
 prune ::
 	rm .openapi-generator-ignore 2>/dev/null || true
@@ -31,7 +41,11 @@ prune ::
 	rm .travis.yml 2>/dev/null || true
 	rm git_push.sh 2>/dev/null || true
 	rm openapitools.json 2>/dev/null || true
+	rm README.md 2>/dev/null || true
 	rm -r .openapi-generator 2>/dev/null || true
+	rm -r docs 2>/dev/null || true
+	rm -r api 2>/dev/null || true
+	rm -r test 2>/dev/null || true
 
 clean ::
 	rm -r api 2>/dev/null || true

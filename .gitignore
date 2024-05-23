@@ -1,2 +1,10 @@
 .idea/
 cmd/mully/mully 
+
+pkg/mullvad_*/*.go
+pkg/mullvad_*/api
+pkg/mullvad_*/test
+pkg/mullvad_*/docs
+pkg/mullvad_*/*.sh
+pkg/mullvad_*/*.json
+pkg/mullvad_*/README.md
