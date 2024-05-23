@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
+	"google.golang.org/protobuf/types/known/emptypb"
+
+	"git.tcp.direct/kayos/mully/pkg/mullvad_mgmt"
 )
 
 func printAccountInfo(client *RPCClient) {
@@ -61,8 +65,36 @@ func main() {
 	defer cancel()
 
 	if err = client.Connect(ctx); err != nil {
-		client.log.Logger.Fatal().Err(err).Msg("failed to connect to the mullvad daemon")
+		zlog.Fatal().Err(err).Msg("failed to connect to the mullvad daemon")
 	}
+
+	deviceState, err := client.mgmtClient.GetDevice(ctx, &emptypb.Empty{})
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("failed to get device state")
+	}
+
+	var accountAndDevice *mullvad_mgmt.AccountAndDevice
+
+	if accountAndDevice = deviceState.GetDevice(); accountAndDevice == nil {
+		zlog.Fatal().Msg("device state is nil")
+		return // unreachable, but the nilness analyzer (linter) was confused.
+	}
+
+	if client.config.Account = accountAndDevice.GetAccountToken(); client.config.Account == "" {
+		zlog.Fatal().Msg("account token is empty")
+	}
+
+	zlog.Info().Msgf("account token: %s", client.config.Account)
+
+	if client.device = accountAndDevice.GetDevice(); client.device == nil {
+		zlog.Fatal().Msg("device is empty")
+	}
+
+	zlog.Info().Str("ID", client.device.GetId()).Send()
+	zlog.Info().Str("name", client.device.GetName()).Send()
+	zlog.Info().Str("pubkey", hex.EncodeToString(client.device.GetPubkey())).Send()
+	zlog.Info().Bool("hijack_dns", client.device.GetHijackDns()).Send()
+	zlog.Info().Time("created", client.device.GetCreated().AsTime()).Send()
 
 	<-sigChan
 }

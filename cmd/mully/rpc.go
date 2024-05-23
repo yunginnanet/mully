@@ -19,6 +19,7 @@ import (
 type RPCClient struct {
 	*grpc.ClientConn
 	mgmtClient mullvad_mgmt.ManagementServiceClient
+	device     *mullvad_mgmt.Device
 	log        *zwrap.Logger
 	hooker     *logHooker
 	config     *Config
