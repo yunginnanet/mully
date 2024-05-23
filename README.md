@@ -1,5 +1,6 @@
 # mully
-> **Warning**
+
+> [!NOTE]
 > This project is in early development and is not yet ready for use.
 
 interacts with a locally running `mullvad-daemon` instance with gRPC and golang, additionally provides a client for the https mullvad API.
