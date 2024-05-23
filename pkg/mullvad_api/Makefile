@@ -5,20 +5,24 @@ SET_SPEC_PATH = $(eval SPEC_PATH=$(GET_SPEC_PATH))
 VERSION := "0.0.1"
 UAGENT = "mully/$(VERSION)"
 
-all :: dep clean fetch gen prune
+all: dep gen prune
 
 dep ::
 	if ! openapi-generator-cli version 2>&1 > /dev/null; then \
 		npm install @openapitools/openapi-generator-cli -g || return 1; \
  	fi
 
-fetch ::
+api/mullvad_api.yaml:
 	mkdir -p api
 	$(SET_SPEC_PATH)
 	SPEC_URL="$(API_BASE)$(SPEC_PATH)"; \
 		curl "$$SPEC_URL" -o api/mullvad_api.yaml;
 
-gen ::
+fetch: api/mullvad_api.yaml api_default.go
+
+gen: dep fetch api_default.go
+
+api_default.go:
 	openapi-generator-cli generate \
 		-g go \
 		-i api/mullvad_api.yaml \
