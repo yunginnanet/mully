@@ -53,16 +53,25 @@ func flagConfigVals(conf *Config) error {
 		case "--trace":
 			conf.logLevel = zerolog.TraceLevel
 		default:
+			// continue to next switch
 		}
 
 		switch {
-		case conf.Account != "":
-			return badArg(arg)
+
 		case conf.Account == "" && !strings.HasPrefix(arg, "-"):
-			conf.Account = arg
+
+			conf.Account = arg // set account key
+
+		case conf.Account != "":
+
+			return badArg(arg) // extra argument
+
 		case conf.Account == "" && strings.HasPrefix(arg, "-"):
-			return badArg(arg)
+
+			return badArg(arg) // unknown flag
+
 		default:
+
 		}
 	}
 
@@ -70,10 +79,6 @@ func flagConfigVals(conf *Config) error {
 }
 
 func getConfig() (*Config, error) {
-	if len(os.Args) < 2 && os.Getenv("MULLVAD_ACCOUNT") == "" {
-		return nil, fmt.Errorf("missing mullvad account key")
-	}
-
 	conf := &Config{
 		logLevel: zerolog.InfoLevel,
 		timeout:  5 * time.Second,
@@ -83,10 +88,6 @@ func getConfig() (*Config, error) {
 
 	if os.Getenv("MULLVAD_ACCOUNT") != "" && conf.Account == "" {
 		conf.Account = os.Getenv("MULLVAD_ACCOUNT")
-	}
-
-	if conf.Account == "" {
-		errs = append(errs, fmt.Errorf("missing mullvad account key"))
 	}
 
 	return conf, errors.Join(errs...)
