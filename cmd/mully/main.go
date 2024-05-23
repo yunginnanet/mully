@@ -29,31 +29,33 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	tmpLog := initConsoleLogger(nil)
-
 	conf, err := getConfig()
 	if err != nil {
-		tmpLog.Logger.Fatal().Err(err).Msg("missing configuration")
+		println(err.Error())
+		return
 	}
 
 	checkProto(conf.logLevel == zerolog.TraceLevel)
 	client, err := NewRPCClient(conf)
 	if err != nil {
-		tmpLog.Logger.Fatal().Err(err).Msg("failed to connect to the mullvad daemon")
+		println(err.Error())
+		return
 	}
 
+	zlog := client.log.Logger
+
 	defer func() {
-		client.log.Logger.Warn().Msg("closing connection to the mullvad daemon (main defer)")
+		zlog.Warn().Msg("signal caught, shutting down")
 		if err = client.Close(); err != nil {
-			client.log.Logger.Error().Err(err).Msg("failed to close connection to the mullvad daemon")
+			zlog.Error().Err(err).Msg("failed to close connection to the mullvad daemon")
 			return
 		}
-		client.log.Logger.Debug().Msg("connection closed")
+		zlog.Debug().Msg("connection closed")
 	}()
 
-	client.log.Logger.Debug().Msg("client initialized")
+	zlog.Trace().Msg("client initialized")
 
-	client.log.Logger.Debug().Msg("connecting...")
+	zlog.Debug().Msg("connecting...")
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(conf.timeout))
 	defer cancel()

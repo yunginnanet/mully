@@ -90,10 +90,10 @@ waitLoop:
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-states:
-			r.log.Logger.Debug().Msg("state changed")
+		case newState := <-states:
+			r.log.Logger.Debug().Str("state", newState.String()).Msg("state changed")
 		case <-readyConn:
-			r.log.Logger.Info().Msg("connection ready")
+			r.log.Logger.Info().Msg("connected")
 			break waitLoop
 		}
 	}
@@ -102,7 +102,7 @@ waitLoop:
 }
 
 func (r *RPCClient) Connect(ctx context.Context) error {
-	log := r.log
+	zlog := r.log.Logger
 
 	if err := r.connect(ctx); err != nil {
 		return fmt.Errorf("failed to connect to the gRPC endpoint: %w", err)
@@ -114,12 +114,12 @@ func (r *RPCClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to get current daemon version: %w", err)
 	}
 
-	log.Logger.Trace().Msgf("current daemon version: %s", verStrPB.Value)
+	zlog.Trace().Msgf("current daemon version: %s", verStrPB.Value)
 	verPB, err := r.mgmtClient.GetVersionInfo(ctx, &emptypb.Empty{})
 	if err != nil {
-		log.Logger.Fatal().Err(err).Msg("failed to get daemon version info")
+		zlog.Fatal().Err(err).Msg("failed to get daemon version info")
 	}
-	log.Logger.Info().Msgf("daemon version info: %s", verPB.String())
+	zlog.Info().Msgf("daemon version info: %s", verPB.String())
 
 	return nil
 }

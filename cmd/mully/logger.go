@@ -8,6 +8,7 @@ import (
 
 	"git.tcp.direct/kayos/zwrap"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/connectivity"
 )
 
 var stateColors = map[string]int{
@@ -18,6 +19,7 @@ var stateColors = map[string]int{
 	"IDLE":              37,
 	"TRANSIENT_FAILURE": 31,
 	"SHUTDOWN":          31,
+	"STATE":             36,
 }
 
 var replacer = strings.NewReplacer(
@@ -65,7 +67,22 @@ func debugFormatPrep(fields map[string]interface{}) error {
 	return nil
 }
 
+func checkTransitionState(fields map[string]interface{}) {
+	if _, ok := fields["message"]; !ok {
+		return
+	}
+	if fields["message"].(string) != "state changed" {
+		return
+	}
+	if st, ok := fields["state"]; !ok || st.(string) == "" {
+		return
+	}
+	fields["message"] = fields["state"].(string)
+	fields["state"] = "STATE"
+}
+
 func formatPrep(fields map[string]interface{}) error {
+	checkTransitionState(fields)
 	if _, ok := fields["state"]; !ok {
 		if err := debugFormatPrep(fields); err != nil {
 			panic(err)
@@ -127,6 +144,11 @@ func (h *logHooker) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 }
 
 func (r *RPCClient) hookRun(e *zerolog.Event, level zerolog.Level, msg string) {
-	e.Str("state", r.GetState().String())
-	e.Str("caller", r.CanonicalTarget())
+	state := r.GetState()
+	e.Str("state", state.String())
+	if state != connectivity.Ready || msg == "state changed" {
+		e.Str("caller", r.CanonicalTarget())
+		return
+	}
+	e.Str("caller", "mullvad-daemon")
 }
