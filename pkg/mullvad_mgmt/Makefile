@@ -1,6 +1,5 @@
 PROTO_URL_BASE := https://raw.githubusercontent.com/mullvad/mullvadvpn-app/main
 PROTO_URL := $(PROTO_URL_BASE)/mullvad-management-interface/proto/management_interface.proto
-GET_PROTOC_GO_RPC = $(shell which protoc-gen-go-grpc)
 GET_PROTOC_GO_RPC = $(eval PROTOC_GO_RPC=$(GET_PROTOC_GO_RPC))
 
 all :: dep gen prune
