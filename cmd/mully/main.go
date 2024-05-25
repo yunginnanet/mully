@@ -3,30 +3,79 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"git.tcp.direct/kayos/mully/pkg/mullvad_mgmt"
 )
 
-func printAccountInfo(client *RPCClient) {
-	/*var (
-		accountID     string
-		accountExpiry time.Time
-		err           error
-	)
-
-	accountID, accountExpiry, err = client.GetAccountInfo(ctx)
-	if err != nil {
-		client.log.Logger.Fatal().Err(err).Msg("failed to get account info")
+func rl(ctx context.Context) (chan string, error) {
+	fd := int(os.Stdin.Fd())
+	w, h, e := term.GetSize(fd)
+	if e != nil {
+		return nil, e
 	}
-	client.log.Logger.Trace().Msg("got account info")
-	client.log.Logger.Info().Msgf("account id: %s, expiry: %s", accountID, accountExpiry.String())*/
+	winch := make(chan os.Signal, 1)
+	signal.Notify(winch, syscall.SIGWINCH)
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return nil, err
+	}
+	t := term.NewTerminal(os.Stdin, "mully> ")
+	if err = t.SetSize(w, h); err != nil {
+		return nil, err
+	}
+
+	lines := make(chan string)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				line, lineErr := t.ReadLine()
+				if lineErr != nil && !errors.Is(lineErr, io.EOF) {
+					panic(lineErr)
+				}
+				lines <- line
+			}
+		}
+	}()
+
+	go func() {
+		defer func() {
+			if restoreErr := term.Restore(fd, oldState); restoreErr != nil {
+				panic(restoreErr)
+			}
+		}()
+		for {
+			select {
+			case <-winch:
+				w, h, e = term.GetSize(fd)
+				if e != nil {
+					panic(e)
+				}
+				if err = t.SetSize(w, h); err != nil {
+					panic(err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return lines, nil
 }
 
 func main() {
@@ -68,6 +117,28 @@ func main() {
 		zlog.Fatal().Err(err).Msg("failed to connect to the mullvad daemon")
 	}
 
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	events, err := client.mgmtClient.EventsListen(ctx, &emptypb.Empty{})
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("failed to listen for daemon events")
+	}
+
+	go func() {
+		for {
+			de := &mullvad_mgmt.DaemonEvent{}
+			// when ctx is canceled, this will return an error, so we don't need to poll ctx.Done()
+			if err = events.RecvMsg(de); err != nil {
+				if !errors.Is(err, io.EOF) {
+					zlog.Error().Err(err).Msg("failed to receive daemon event")
+				}
+				return
+			}
+			zlog.Info().Msgf("daemon event: [%T] %v", de, de)
+		}
+	}()
+
 	deviceState, err := client.mgmtClient.GetDevice(ctx, &emptypb.Empty{})
 	if err != nil {
 		zlog.Fatal().Err(err).Msg("failed to get device state")
@@ -96,5 +167,81 @@ func main() {
 	zlog.Info().Bool("hijack_dns", client.device.GetHijackDns()).Send()
 	zlog.Info().Time("created", client.device.GetCreated().AsTime()).Send()
 
-	<-sigChan
+	excludedProcesses, err := client.mgmtClient.GetExcludedProcesses(ctx, &emptypb.Empty{})
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("failed to get excluded processes")
+	}
+
+	tunnelState, err := client.mgmtClient.GetTunnelState(ctx, &emptypb.Empty{})
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("failed to get tunnel state")
+	}
+
+	zlog.Info().Msgf("tunnel state: %s", tunnelState.String())
+
+	if procs := excludedProcesses.GetProcesses(); procs != nil && len(procs) > 0 {
+		for _, proc := range procs {
+			zlog.Info().
+				Uint32("PID", proc.GetPid()).
+				Str("image", proc.GetImage()).
+				Bool("inherited", proc.GetInherited()).
+				Send()
+		}
+	} else {
+		zlog.Debug().Msg("no excluded processes")
+	}
+
+	settings, err := client.mgmtClient.GetSettings(ctx, &emptypb.Empty{})
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("failed to get settings")
+	}
+
+	zlog.Info().Msgf("settings: %s", settings.String())
+
+	lines, err := rl(ctx)
+	if err != nil {
+		zlog.Fatal().Err(err).Msg("failed to initialize readline")
+	}
+
+waitLoop:
+	for {
+		select {
+		case sig := <-sigChan:
+			zlog.Warn().Msgf("received signal: %s, shutting down mully client", sig.String())
+			cancel()
+			break waitLoop
+		case line := <-lines:
+			switch strings.ToLower(line) {
+			case "exit":
+				cancel()
+				break waitLoop
+			case "disconnect":
+				var pbok = &wrapperspb.BoolValue{}
+				if pbok, err = client.mgmtClient.DisconnectTunnel(ctx, &emptypb.Empty{}); err != nil {
+					zlog.Error().Err(err).Msg("failed to disconnect tunnel")
+				}
+				switch {
+				case err != nil:
+					zlog.Error().Err(err).Msg("failed to disconnect tunnel")
+				case pbok.GetValue():
+					zlog.Info().Msg("tunnel disconnected")
+				case !pbok.GetValue():
+					zlog.Warn().Msg("tunnel already disconnected")
+				}
+			case "connect":
+				var pbok = &wrapperspb.BoolValue{}
+				if pbok, err = client.mgmtClient.ConnectTunnel(ctx, &emptypb.Empty{}); err != nil {
+					zlog.Error().Err(err).Msg("failed to connect tunnel")
+				}
+				switch {
+				case err != nil:
+					zlog.Error().Err(err).Msg("failed to connect tunnel")
+				case pbok.GetValue():
+					zlog.Info().Msg("tunnel connected")
+				case !pbok.GetValue():
+					zlog.Error().Msg("tunnel already connected")
+				}
+			}
+		}
+	}
 }

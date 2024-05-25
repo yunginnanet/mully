@@ -7,6 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/rs/zerolog v1.32.0
 	github.com/stretchr/testify v1.9.0
+	golang.org/x/term v0.18.0
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1
 )
