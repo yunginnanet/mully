@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"git.tcp.direct/kayos/mully/pkg/mullvad_mgmt"
+	"git.tcp.direct/kayos/mully/pkg/socket"
 )
 
 type RPCClient struct {
@@ -23,6 +24,7 @@ type RPCClient struct {
 	log        *zwrap.Logger
 	hooker     *logHooker
 	config     *Config
+	unixS      *socket.UnixSocket
 }
 
 func NewRPCClient(c *Config) (*RPCClient, error) {

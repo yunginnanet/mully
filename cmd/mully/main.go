@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -8,35 +9,39 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"git.tcp.direct/kayos/zwrap"
 	"github.com/rs/zerolog"
 	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"git.tcp.direct/kayos/mully/pkg/mullvad_mgmt"
+	"git.tcp.direct/kayos/mully/pkg/socket"
 )
 
-func rl(ctx context.Context) (chan string, error) {
+func rl(ctx context.Context) (linrd chan string, promptLock *sync.Mutex, err error) {
 	fd := int(os.Stdin.Fd())
 	w, h, e := term.GetSize(fd)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	winch := make(chan os.Signal, 1)
 	signal.Notify(winch, syscall.SIGWINCH)
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	t := term.NewTerminal(os.Stdin, "mully> ")
 	if err = t.SetSize(w, h); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	lines := make(chan string)
+	promptLock = &sync.Mutex{}
 
 	go func() {
 		for {
@@ -44,6 +49,7 @@ func rl(ctx context.Context) (chan string, error) {
 			case <-ctx.Done():
 				return
 			default:
+				promptLock.Lock()
 				line, lineErr := t.ReadLine()
 				if lineErr != nil && !errors.Is(lineErr, io.EOF) {
 					panic(lineErr)
@@ -75,7 +81,57 @@ func rl(ctx context.Context) (chan string, error) {
 		}
 	}()
 
-	return lines, nil
+	return lines, promptLock, nil
+}
+
+var (
+	pong = []byte("PONG\n")
+	bye  = []byte("BYE\n")
+)
+
+func (r *RPCClient) handleSocketCommand(in []byte) (out []byte) {
+	switch string(bytes.Fields(in)[0]) {
+	case "PING":
+		return pong
+	case "QUIT":
+		go func() {
+			time.Sleep(1 * time.Second)
+			_ = r.unixS.Close()
+		}()
+		return bye
+	case "RELAY":
+		if len(bytes.Fields(in)) < 2 {
+			tState, err := r.mgmtClient.GetTunnelState(context.Background(), &emptypb.Empty{})
+			if err != nil {
+				r.log.Logger.Error().Err(err).Msg("failed to get tunnel state")
+				return []byte("ERROR\n")
+			}
+			connState := tState.GetConnected()
+			switch {
+			case connState == nil:
+				return []byte("DISCONNECTED\n")
+			default:
+				//
+			}
+			relayInfo := connState.GetRelayInfo()
+			if relayInfo == nil {
+				return []byte("DISCONNECTED\n")
+			}
+			return []byte("RELAY " + relayInfo.TunnelEndpoint.String() + "\n")
+		}
+		switch string(bytes.Fields(in)[1]) {
+		case "RANDOM":
+			targetCountry := ""
+			if len(bytes.Fields(in)) > 2 {
+				targetCountry = string(bytes.Fields(in)[2])
+				if len(targetCountry) < 2 {
+					return []byte("ERROR\n")
+				}
+
+			}
+		}
+	}
+	return nil
 }
 
 func main() {
@@ -198,23 +254,22 @@ func main() {
 
 	zlog.Info().Msgf("settings: %s", settings.String())
 
-	lines, err := rl(ctx)
+	lines, plock, err := rl(ctx)
 	if err != nil {
 		zlog.Fatal().Err(err).Msg("failed to initialize readline")
 	}
 
-waitLoop:
 	for {
 		select {
 		case sig := <-sigChan:
 			zlog.Warn().Msgf("received signal: %s, shutting down mully client", sig.String())
 			cancel()
-			break waitLoop
+			os.Exit(0)
 		case line := <-lines:
 			switch strings.ToLower(line) {
 			case "exit":
 				cancel()
-				break waitLoop
+				return
 			case "disconnect":
 				var pbok = &wrapperspb.BoolValue{}
 				if pbok, err = client.mgmtClient.DisconnectTunnel(ctx, &emptypb.Empty{}); err != nil {
@@ -241,7 +296,30 @@ waitLoop:
 				case !pbok.GetValue():
 					zlog.Error().Msg("tunnel already connected")
 				}
+			case "listen_unix":
+				u, e := socket.NewUnixSocket("/tmp/mully.sock", zwrap.Wrap(*zlog))
+				if e != nil {
+					zlog.Error().Err(e).Msg("failed to create unix socket")
+					break
+				}
+				u.SetCommandHandler(client.handleSocketCommand)
+				zlog.Info().Msg("listening on /tmp/mully.sock")
+			case "relay":
+				var relayInfo *mullvad_mgmt.TunnelEndpoint
+				var tState *mullvad_mgmt.TunnelState
+				if tState, err = client.mgmtClient.GetTunnelState(ctx, &emptypb.Empty{}); err != nil {
+					zlog.Error().Err(err).Msg("failed to get tunnel state")
+					break
+				}
+				relayInfo = tState.GetConnected().GetRelayInfo().GetTunnelEndpoint()
+				if relayInfo == nil {
+					zlog.Error().Msg("relay info is nil")
+					break
+				}
+				zlog.Info().Msgf("relay: %s", relayInfo.String())
+
 			}
+			plock.Unlock()
 		}
 	}
 }
